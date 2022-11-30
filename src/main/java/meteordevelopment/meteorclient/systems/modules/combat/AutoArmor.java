@@ -15,7 +15,10 @@ import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.player.ChestSwap;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
+import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.item.ArmorItem;
@@ -29,6 +32,8 @@ import java.util.List;
 
 public class AutoArmor extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+
+    private final SettingGroup sgBypass = settings.createGroup("Bypass");
 
     private final Setting<Protection> preferredProtection = sgGeneral.add(new EnumSetting.Builder<Protection>()
         .name("preferred-protection")
@@ -74,6 +79,21 @@ public class AutoArmor extends Module {
         .build()
     );
 
+    private final Setting<Boolean> standStill = sgBypass.add(new BoolSetting.Builder()
+        .name("stand-still")
+        .description("Does nothing while you move.")
+        .defaultValue(true)
+        .build()
+    );
+
+
+    private final Setting<InventoryBypass> inventoryBypass = sgBypass.add(new EnumSetting.Builder<InventoryBypass>()
+        .name("inventory-bypass")
+        .description("Inventory check bypass")
+        .defaultValue(InventoryBypass.Disabled)
+        .build()
+    );
+
     private final Object2IntMap<Enchantment> enchantments = new Object2IntOpenHashMap<>();
     private final ArmorPiece[] armorPieces = new ArmorPiece[4];
     private final ArmorPiece helmet = new ArmorPiece(3);
@@ -98,6 +118,16 @@ public class AutoArmor extends Module {
 
     @EventHandler
     private void onPreTick(TickEvent.Pre event) {
+        if (inventoryBypass.get() == InventoryBypass.OnOpenInventory && !(mc.currentScreen instanceof InventoryScreen || mc.currentScreen instanceof CreativeInventoryScreen)) {
+            applyDelay();
+            return;
+        }
+
+        if (standStill.get() && PlayerUtils.isMoving()) {
+            applyDelay();
+            return;
+        }
+
         // Wait for timer (delay)
         if (timer > 0) {
             timer--;
@@ -183,8 +213,7 @@ public class AutoArmor extends Module {
     private void swap(int from, int armorSlotId) {
         InvUtils.move().from(from).toArmor(armorSlotId);
 
-        // Apply delay
-        timer = delay.get();
+        applyDelay();
     }
 
     private void moveToEmpty(int armorSlotId) {
@@ -192,12 +221,14 @@ public class AutoArmor extends Module {
             if (mc.player.getInventory().getStack(i).isEmpty()) {
                 InvUtils.move().fromArmor(armorSlotId).to(i);
 
-                // Apply delay
-                timer = delay.get();
-
+                applyDelay();
                 break;
             }
         }
+    }
+
+    private void applyDelay() {
+        timer = delay.get();
     }
 
     public enum Protection {
@@ -305,5 +336,10 @@ public class AutoArmor extends Module {
 
             return score;
         }
+    }
+
+    public enum InventoryBypass {
+        Disabled,
+        OnOpenInventory
     }
 }
